@@ -11,6 +11,7 @@
 //! - Buyers fund escrows by locking tokens in the contract
 //! - Funds are released upon delivery confirmation or after a shipping window expires
 //! - Disputes can be raised and resolved by a designated third-party resolver
+//! - Protocol fees are collected on all successful settlements
 //!
 //! ## State Machine
 //!
@@ -22,6 +23,9 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
+/// Maximum protocol fee in basis points (300 = 3%).
+const MAX_FEE_BPS: u32 = 300;
+
 /// Storage keys for persisting escrow data and the global escrow counter.
 #[contracttype]
 pub enum DataKey {
@@ -29,6 +33,8 @@ pub enum DataKey {
     Escrow(u32),
     /// Key for the global counter tracking the total number of escrows created.
     EscrowCount,
+    /// Key for the protocol fee collector address.
+    FeeCollector,
 }
 
 /// Complete escrow record containing all transaction details and current state.
@@ -45,6 +51,8 @@ pub struct EscrowData {
     pub token: Address,
     /// Amount of tokens locked in the escrow.
     pub amount: i128,
+    /// Protocol fee in basis points (100 = 1%).
+    pub fee_bps: u32,
     /// Time window in seconds after funding during which auto-release is not allowed.
     pub shipping_window: u64,
     /// Ledger timestamp when the escrow was funded. Zero if not yet funded.
@@ -69,13 +77,83 @@ pub enum EscrowState {
     Refunded,
 }
 
+/// Protocol fee configuration.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    /// Address that receives protocol fees.
+    pub collector: Address,
+    /// Maximum allowed fee in basis points.
+    pub max_fee_bps: u32,
+}
+
 /// TrustLink escrow contract implementation.
 #[contract]
 pub struct Escrow;
 
+/// Calculates the protocol fee, transfers it to the fee collector, and sends
+/// the remainder to the designated recipient. This is the single source of
+/// truth for all outbound escrow disbursements.
+fn deduct_and_transfer(env: &Env, token_addr: &Address, recipient: &Address, amount: i128, fee_bps: u32) {
+    let fee = amount
+        .checked_mul(fee_bps as i128)
+        .expect("fee overflow")
+        / 10_000i128;
+    let net = amount.checked_sub(fee).expect("fee underflow");
+
+    let token_client = token::Client::new(env, token_addr);
+
+    if fee > 0 {
+        let collector: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeCollector)
+            .expect("fee collector not set");
+        token_client.transfer(&env.current_contract_address(), &collector, &fee);
+    }
+
+    token_client.transfer(&env.current_contract_address(), recipient, &net);
+}
+
 #[contractimpl]
 #[allow(deprecated)]
 impl Escrow {
+    /// Initializes the contract with a protocol fee collector address.
+    ///
+    /// This function must be called once before any escrow settlements can occur.
+    /// It sets the address that will receive protocol fees from all escrow completions.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment providing access to ledger state and storage.
+    /// * `fee_collector` - The address that will receive all protocol fees.
+    ///
+    /// # Returns
+    ///
+    /// Returns `()` on success.
+    ///
+    /// # Errors
+    ///
+    /// This function panics if:
+    /// - The contract has already been initialized (fee collector is already set).
+    ///
+    /// # Auth
+    ///
+    /// No authorization required for the initial setup. However, this function can
+    /// only be called once, preventing unauthorized changes to the fee collector.
+    pub fn initialize(env: Env, fee_collector: Address) {
+        if env
+            .storage()
+            .instance()
+            .has(&DataKey::FeeCollector)
+        {
+            panic!("already initialized");
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeCollector, &fee_collector);
+    }
+
     /// Creates a new escrow transaction in the Pending state.
     ///
     /// This function initializes an escrow with the specified parameters and assigns it
@@ -89,6 +167,7 @@ impl Escrow {
     /// * `resolver` - The address authorized to resolve disputes if they arise.
     /// * `token` - The address of the SEP-41 token contract to be used for payment.
     /// * `amount` - The quantity of tokens to be locked in escrow (must be positive).
+    /// * `fee_bps` - Protocol fee in basis points (100 = 1%, max 300 = 3%).
     /// * `shipping_window` - Duration in seconds after funding before auto-release is permitted.
     ///
     /// # Returns
@@ -100,6 +179,7 @@ impl Escrow {
     ///
     /// This function panics if:
     /// - The seller address fails authentication (does not sign the transaction).
+    /// - The `fee_bps` exceeds the maximum allowed fee (300 basis points).
     /// - Storage operations fail (extremely rare in normal operation).
     ///
     /// # Auth
@@ -112,9 +192,11 @@ impl Escrow {
         resolver: Address,
         token: Address,
         amount: i128,
+        fee_bps: u32,
         shipping_window: u64,
     ) -> u32 {
         seller.require_auth();
+        assert!(fee_bps <= MAX_FEE_BPS, "fee exceeds maximum");
 
         let mut count: u32 = env
             .storage()
@@ -129,6 +211,7 @@ impl Escrow {
             resolver,
             token,
             amount,
+            fee_bps,
             shipping_window,
             funded_at: 0,
             state: EscrowState::Pending,
@@ -203,8 +286,8 @@ impl Escrow {
     ///
     /// This function allows the buyer to confirm that goods or services have been
     /// delivered satisfactorily. Upon confirmation, the locked tokens are immediately
-    /// transferred from the contract to the seller, and the escrow transitions to
-    /// the Completed state.
+    /// transferred from the contract to the seller (minus protocol fee), and the escrow
+    /// transitions to the Completed state.
     ///
     /// # Arguments
     ///
@@ -213,8 +296,8 @@ impl Escrow {
     ///
     /// # Returns
     ///
-    /// Returns `()` on success. The tokens are transferred to the seller and the
-    /// escrow state is updated to Completed.
+    /// Returns `()` on success. The tokens are transferred to the seller (after fee
+    /// deduction) and the escrow state is updated to Completed.
     ///
     /// # Errors
     ///
@@ -224,6 +307,7 @@ impl Escrow {
     /// - The buyer address fails authentication (does not sign the transaction).
     /// - The escrow has no buyer recorded (should never happen if state is Funded).
     /// - The token transfer fails (contract balance insufficient, token contract error).
+    /// - The fee collector has not been initialized.
     ///
     /// # Auth
     ///
@@ -241,12 +325,7 @@ impl Escrow {
         let buyer = escrow.buyer.clone().expect("escrow has no buyer");
         buyer.require_auth();
 
-        let token_client = token::Client::new(&env, &escrow.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &escrow.seller,
-            &escrow.amount,
-        );
+        deduct_and_transfer(&env, &escrow.token, &escrow.seller, escrow.amount, escrow.fee_bps);
 
         let mut updated = escrow;
         updated.state = EscrowState::Completed;
@@ -320,8 +399,8 @@ impl Escrow {
     /// This function allows the designated resolver to make a final decision on a
     /// disputed escrow. Based on the `release_to_seller` parameter, funds are either
     /// transferred to the seller (if the dispute is resolved in their favor) or
-    /// refunded to the buyer. The escrow transitions to either Completed or Refunded
-    /// state accordingly.
+    /// refunded to the buyer. Protocol fees are deducted in both cases. The escrow
+    /// transitions to either Completed or Refunded state accordingly.
     ///
     /// # Arguments
     ///
@@ -332,7 +411,7 @@ impl Escrow {
     /// # Returns
     ///
     /// Returns `()` on success. The tokens are transferred to the appropriate party
-    /// and the escrow state is updated to Completed or Refunded.
+    /// (after fee deduction) and the escrow state is updated to Completed or Refunded.
     ///
     /// # Errors
     ///
@@ -342,6 +421,7 @@ impl Escrow {
     /// - The resolver address fails authentication (does not sign the transaction).
     /// - The escrow has no buyer recorded (should never happen if state is Disputed).
     /// - The token transfer fails (contract balance insufficient, token contract error).
+    /// - The fee collector has not been initialized.
     ///
     /// # Auth
     ///
@@ -358,20 +438,13 @@ impl Escrow {
 
         escrow.resolver.require_auth();
 
-        let token_client = token::Client::new(&env, &escrow.token);
-        if release_to_seller {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &escrow.seller,
-                &escrow.amount,
-            );
+        let recipient = if release_to_seller {
+            escrow.seller.clone()
         } else {
-            token_client.transfer(
-                &env.current_contract_address(),
-                escrow.buyer.clone().expect("escrow has no buyer"),
-                &escrow.amount,
-            );
-        }
+            escrow.buyer.clone().expect("escrow has no buyer")
+        };
+
+        deduct_and_transfer(&env, &escrow.token, &recipient, escrow.amount, escrow.fee_bps);
 
         let mut updated = escrow;
         updated.state = if release_to_seller {
@@ -392,7 +465,8 @@ impl Escrow {
     /// This function provides a permissionless mechanism to release funds to the seller
     /// when the buyer has not confirmed delivery or raised a dispute within the
     /// specified shipping window. Anyone can call this function once the time condition
-    /// is met, preventing funds from being locked indefinitely.
+    /// is met, preventing funds from being locked indefinitely. Protocol fees are
+    /// deducted from the transfer.
     ///
     /// # Arguments
     ///
@@ -401,8 +475,8 @@ impl Escrow {
     ///
     /// # Returns
     ///
-    /// Returns `()` on success. The tokens are transferred to the seller and the
-    /// escrow state is updated to Completed.
+    /// Returns `()` on success. The tokens are transferred to the seller (after fee
+    /// deduction) and the escrow state is updated to Completed.
     ///
     /// # Errors
     ///
@@ -411,6 +485,7 @@ impl Escrow {
     /// - The escrow is not in the Funded state (cannot auto-release pending or completed escrows).
     /// - The shipping window has not yet elapsed (current timestamp < funded_at + shipping_window).
     /// - The token transfer fails (contract balance insufficient, token contract error).
+    /// - The fee collector has not been initialized.
     ///
     /// # Auth
     ///
@@ -430,12 +505,7 @@ impl Escrow {
             "shipping window not elapsed"
         );
 
-        let token_client = token::Client::new(&env, &escrow.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &escrow.seller,
-            &escrow.amount,
-        );
+        deduct_and_transfer(&env, &escrow.token, &escrow.seller, escrow.amount, escrow.fee_bps);
 
         let mut updated = escrow;
         updated.state = EscrowState::Completed;
@@ -474,6 +544,40 @@ impl Escrow {
             .instance()
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found")
+    }
+
+    /// Retrieves the current protocol fee configuration.
+    ///
+    /// This is a read-only view function that returns the fee collector address
+    /// and the maximum allowed fee in basis points.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment providing access to ledger state and storage.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`FeeConfig`] struct containing the collector address and maximum fee.
+    ///
+    /// # Errors
+    ///
+    /// This function panics if the fee collector has not been initialized.
+    ///
+    /// # Auth
+    ///
+    /// No authorization required. This is a public read-only function that can be
+    /// called by anyone to inspect the fee configuration.
+    pub fn get_fee_config(env: Env) -> FeeConfig {
+        let collector: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeCollector)
+            .expect("fee collector not set");
+
+        FeeConfig {
+            collector,
+            max_fee_bps: MAX_FEE_BPS,
+        }
     }
 }
 
