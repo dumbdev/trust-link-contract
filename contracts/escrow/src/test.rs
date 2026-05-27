@@ -578,3 +578,105 @@ fn test_fee_exceeds_max_bps_fails() {
     // 301 bps exceeds MAX_FEE_BPS (300)
     client.create_escrow(&seller, &resolver, &token, &1000_i128, &301_u32, &3600_u64);
 }
+
+#[test]
+fn test_dispute_before_deadline_succeeds() {
+    let (env, seller, buyer, resolver, _admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+
+    let escrow = client.get_escrow(&id);
+    let funded_at = escrow.funded_at;
+    
+    // Advance time to 47h59m after funding (172740 seconds = 48*3600 - 60)
+    env.ledger().set_timestamp(funded_at + 172740);
+
+    // Dispute should succeed
+    client.raise_dispute(&id, &make_evidence_hash(&env));
+
+    let escrow = client.get_escrow(&id);
+    assert_eq!(escrow.state, EscrowState::Disputed);
+}
+
+#[test]
+#[should_panic(expected = "dispute window closed")]
+fn test_dispute_after_deadline_fails() {
+    let (env, seller, buyer, resolver, _admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+
+    let escrow = client.get_escrow(&id);
+    let funded_at = escrow.funded_at;
+    
+    // Advance time to 48h after funding (172800 seconds = 48*3600)
+    env.ledger().set_timestamp(funded_at + 172800);
+
+    // Dispute should fail with "dispute window closed"
+    client.raise_dispute(&id, &make_evidence_hash(&env));
+}
+
+#[test]
+fn test_auto_release_after_dispute_deadline() {
+    let (env, seller, buyer, resolver, _admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+
+    let escrow = client.get_escrow(&id);
+    let funded_at = escrow.funded_at;
+    
+    // Advance time past both dispute deadline (48h) and shipping window (1h)
+    env.ledger().set_timestamp(funded_at + 172800 + 3600);
+
+    client.auto_release(&id);
+
+    let escrow = client.get_escrow(&id);
+    assert_eq!(escrow.state, EscrowState::Completed);
+    // 2% fee on 1000 = 20 to collector, 980 to seller
+    assert_eq!(get_balance(&env, &token, &seller), 980);
+    assert_eq!(get_balance(&env, &token, &fee_collector), 20);
+}
+
+#[test]
+#[should_panic(expected = "dispute window not closed")]
+fn test_auto_release_before_dispute_deadline_fails() {
+    let (env, seller, buyer, resolver, _admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+
+    let escrow = client.get_escrow(&id);
+    let funded_at = escrow.funded_at;
+    
+    // Advance time past shipping window (1h) but before dispute deadline (48h)
+    env.ledger().set_timestamp(funded_at + 3600);
+
+    // Auto-release should fail because dispute window is still open
+    client.auto_release(&id);
+}

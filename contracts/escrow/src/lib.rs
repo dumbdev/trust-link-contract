@@ -21,7 +21,7 @@ pub struct EscrowData {
     pub fee_bps: u32,
     pub shipping_window: u64,
     pub funded_at: u64,
-    pub state: EscrowState,
+    pub dispute_deadline: u64,
 }
 
 #[contracttype]
@@ -39,6 +39,12 @@ pub enum EscrowState {
 pub struct FeeConfig {
     pub collector: Address,
     pub max_fee_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ContractError {
+    DisputeWindowClosed,
 }
 
 #[contract]
@@ -114,6 +120,7 @@ impl Escrow {
             fee_bps,
             shipping_window,
             funded_at: 0,
+            dispute_deadline: 0,
             state: EscrowState::Pending,
         };
 
@@ -142,6 +149,7 @@ impl Escrow {
         escrow.buyer = Some(buyer.clone());
         escrow.state = EscrowState::Funded;
         escrow.funded_at = env.ledger().timestamp();
+        escrow.dispute_deadline = escrow.funded_at + 172800;
 
         let token_client = token::Client::new(&env, &escrow.token);
         token_client.transfer(&buyer, &env.current_contract_address(), &escrow.amount);
@@ -160,6 +168,10 @@ impl Escrow {
             .expect("escrow not found");
 
         assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        assert!(
+            env.ledger().timestamp() >= escrow.dispute_deadline,
+            "dispute window not closed"
+        );
 
         let buyer = escrow.buyer.clone().expect("escrow has no buyer");
         buyer.require_auth();
@@ -188,6 +200,10 @@ impl Escrow {
             .expect("escrow not found");
 
         assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        assert!(
+            env.ledger().timestamp() >= escrow.dispute_deadline,
+            "dispute window not closed"
+        );
 
         let buyer = escrow.buyer.clone().expect("escrow has no buyer");
         buyer.require_auth();
@@ -243,6 +259,10 @@ impl Escrow {
             .expect("escrow not found");
 
         assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        assert!(
+            env.ledger().timestamp() >= escrow.dispute_deadline,
+            "dispute window not closed"
+        );
         assert!(
             env.ledger().timestamp() >= escrow.funded_at + escrow.shipping_window,
             "shipping window not elapsed"
