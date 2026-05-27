@@ -78,6 +78,7 @@ pub struct EscrowData {
     pub shipping_window: u64,
     pub funded_at: u64,
     pub dispute_deadline: u64,
+    pub state: EscrowState,
 }
 
 #[contracttype]
@@ -106,10 +107,15 @@ pub struct FeeConfig {
     pub max_fee_bps: u32,
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ContractError {
-    DisputeWindowClosed,
+macro_rules! require_state {
+    ($escrow:expr, $expected:expr) => {
+        assert!(
+            $escrow.state == $expected,
+            "escrow state must be {:?}, found {:?}",
+            $expected,
+            $escrow.state
+        )
+    };
 }
 
 #[contract]
@@ -224,7 +230,7 @@ impl Escrow {
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found");
 
-        assert!(escrow.state == EscrowState::Pending, "escrow not pending");
+        require_state!(escrow, EscrowState::Pending);
 
         escrow.buyer = Some(buyer.clone());
         escrow.state = EscrowState::Funded;
@@ -247,7 +253,7 @@ impl Escrow {
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found");
 
-        assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        require_state!(escrow, EscrowState::Funded);
         assert!(
             env.ledger().timestamp() >= escrow.dispute_deadline,
             "dispute window not closed"
@@ -280,7 +286,7 @@ impl Escrow {
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found");
 
-        assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        require_state!(escrow, EscrowState::Funded);
         assert!(
             env.ledger().timestamp() >= escrow.dispute_deadline,
             "dispute window not closed"
@@ -319,7 +325,7 @@ impl Escrow {
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found");
 
-        assert!(escrow.state == EscrowState::Disputed, "escrow not disputed");
+        require_state!(escrow, EscrowState::Disputed);
 
         escrow.resolver.require_auth();
 
@@ -361,7 +367,7 @@ impl Escrow {
             .get(&DataKey::Escrow(escrow_id))
             .expect("escrow not found");
 
-        assert!(escrow.state == EscrowState::Funded, "escrow not funded");
+        require_state!(escrow, EscrowState::Funded);
         assert!(
             env.ledger().timestamp() >= escrow.dispute_deadline,
             "dispute window not closed"
