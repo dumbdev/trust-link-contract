@@ -643,6 +643,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "ArbitrationFee"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Escrow"
                           },
                           {
@@ -665,6 +677,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {
@@ -758,6 +778,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "fee_bps"
                             },
                             "val": {
@@ -845,6 +873,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {
@@ -938,6 +974,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "fee_bps"
                             },
                             "val": {
@@ -1025,6 +1069,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {
@@ -1118,6 +1170,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "fee_bps"
                             },
                             "val": {
@@ -1205,6 +1265,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {
@@ -1298,6 +1366,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "fee_bps"
                             },
                             "val": {
@@ -1385,6 +1461,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {
@@ -1478,6 +1562,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "fee_bps"
                             },
                             "val": {
@@ -1565,6 +1657,14 @@
                               "symbol": "buyer"
                             },
                             "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "dispute_deadline"
+                            },
+                            "val": {
+                              "u64": "0"
+                            }
                           },
                           {
                             "key": {

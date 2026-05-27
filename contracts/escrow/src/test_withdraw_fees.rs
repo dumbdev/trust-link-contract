@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{Escrow, EscrowClient, ContractError};
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Env};
 
 fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address) {
     let env = Env::default();
@@ -30,7 +30,7 @@ fn test_withdraw_fees_after_multiple_escrows() {
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
 
-    client.initialize(&admin, &fee_collector);
+    client.initialize(&admin, &fee_collector, &0_i128);
 
     mint_tokens(&env, &token, &buyer, 3000);
 
@@ -38,6 +38,9 @@ fn test_withdraw_fees_after_multiple_escrows() {
     for _ in 0..3 {
         let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &100_u32, &3600_u64);
         client.fund_escrow(&id, &buyer);
+        
+        // Advance time to allow confirm_delivery
+        env.ledger().set_timestamp(env.ledger().timestamp() + 172801);
         client.confirm_delivery(&id);
     }
 
