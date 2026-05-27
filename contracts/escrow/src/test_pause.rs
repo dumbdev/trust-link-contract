@@ -1,4 +1,5 @@
 #![cfg(test)]
+extern crate std;
 
 use super::*;
 use soroban_sdk::{testutils::Address as _, token, Address, Env, String as SorobanString, Symbol};
@@ -18,7 +19,7 @@ fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address) {
     let token_address = env.register_stellar_asset_contract(token_admin.clone());
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
-    client.initialize(&admin, &fee_collector);
+    client.initialize(&admin, &fee_collector, &0_i128);
 
     (env, admin, seller, buyer, resolver, token_address, contract_id)
 }
