@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{DisputeStatus, Escrow, EscrowClient};
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{testutils::{Address as _, Ledger as _}, token, Address, BytesN, Env, String, Symbol};
 
 fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address) {
     let env = Env::default();
