@@ -9,7 +9,7 @@
 use crate::{ContractError, Escrow, EscrowClient, EscrowState};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    token, Address, Env,
+    token, Address, Env, String as SorobanString,
 };
 
 const DISPUTE_WINDOW_SECS: u64 = 172_800; // 48h, matches the contract constant.
