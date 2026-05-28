@@ -90,3 +90,73 @@ fn auto_release_after_48_hours_succeeds_and_pays_the_seller() {
         .expect("escrow exists");
     assert_eq!(after.state, EscrowState::Completed);
 }
+
+#[test]
+fn auto_release_fails_when_dispute_is_active() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let resolver = Address::generate(&env);
+    let fee_collector = Address::generate(&env);
+
+    // Create token contract
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+
+    // Mint buyer tokens
+    token.mint(&buyer, &1_000);
+
+    // Deploy escrow contract
+    let contract_id = env.register(Escrow, ());
+    let client = EscrowClient::new(&env, &contract_id);
+
+    // Initialize contract
+    client.initialize(&admin, &fee_collector, &0);
+
+    // Create escrow
+    let escrow_id = client.create_escrow(
+        &seller,
+        &resolver,
+        &token.address,
+        &500,
+        &0,
+        &100,
+    );
+
+    // Fund escrow
+    client.fund_escrow(&escrow_id, &buyer);
+
+    // Raise dispute
+    client.raise_dispute(
+        &escrow_id,
+        &Symbol::new(&env, "damaged"),
+        &String::from_str(&env, "item damaged"),
+        &BytesN::from_array(&env, &[0; 32]),
+    );
+
+    // Advance ledger time past release window
+    env.ledger().with_mut(|li| {
+        li.timestamp += DISPUTE_WINDOW + 200;
+    });
+
+    // Contract balance before release attempt
+    let balance_before = token.balance(&contract_id);
+
+    // Attempt auto release
+    let result = client.try_auto_release(&escrow_id);
+
+    // Verify explicit error
+    assert_eq!(
+        result,
+        Err(Ok(ContractError::InvalidState))
+    );
+
+    // Ensure funds remain locked
+    let balance_after = token.balance(&contract_id);
+
+    assert_eq!(balance_before, balance_after);
+    assert_eq!(balance_after, 500);
+}
