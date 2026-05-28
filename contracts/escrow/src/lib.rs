@@ -16,7 +16,7 @@ pub use crate::events::{
 };
 pub use crate::types::{
     ContractConfig, ContractStats, DataKey, DisputeData, DisputeStatus, EscrowData, EscrowState,
-    FeeConfig, ResolutionType,
+    FeeConfig, PublicContractConfig, ResolutionType,
 };
 
 /// Maximum protocol fee in basis points (300 = 3%).
@@ -146,20 +146,6 @@ fn deduct_and_transfer(env: &Env, token_addr: &Address, recipient: &Address, amo
     Ok(())
 }
 
-/// Storage keys for persisting escrow data and the global escrow counter.
-fn ensure_not_paused(env: &Env) {
-    let paused = env
-        .storage()
-        .instance()
-        .get(&DataKey::Paused)
-        .unwrap_or(false);
-    assert!(!paused, "contract paused");
-}
-
-fn require_admin(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::Admin).expect("not initialized")
-}
-
 fn increment_counter(env: &Env, key: &DataKey) {
     let current: u64 = env.storage().instance().get(key).unwrap_or(0);
     env.storage().instance().set(key, &(current + 1));
@@ -195,6 +181,13 @@ impl Escrow {
 
         env.storage().instance().set(&DataKey::Paused, &false);
         emit_contract_unpaused(&env, admin);
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     /// Rotates the admin to a new address. Requires auth from the current admin.
@@ -625,13 +618,38 @@ impl Escrow {
         }
     }
 
-    /// Returns the current contract configuration as a read-only view.
-    pub fn get_contract_config(env: Env) -> ContractConfig {
-        let admin: Address = env
+    /// Returns public-safe contract configuration (no admin or fee collector addresses).
+    pub fn get_public_config(env: Env) -> PublicContractConfig {
+        let fee_bps: u32 = env
             .storage()
             .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
+            .get(&DataKey::DefaultFeeBps)
+            .unwrap_or(0);
+
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+
+        let current_counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EscrowCounter)
+            .unwrap_or(1);
+        let escrow_count = current_counter.saturating_sub(1);
+
+        PublicContractConfig {
+            fee_bps,
+            paused,
+            escrow_count,
+        }
+    }
+
+    /// Returns full contract configuration including privileged addresses. Requires admin auth.
+    pub fn get_contract_config(env: Env) -> ContractConfig {
+        let admin = require_admin(&env);
+        admin.require_auth();
 
         let fee_bps: u32 = env
             .storage()
@@ -657,6 +675,9 @@ impl Escrow {
             fee_bps,
             fee_collector,
             escrow_count,
+        }
+    }
+
     /// Returns on-chain counters for escrow lifecycle events.
     pub fn get_stats(env: Env) -> ContractStats {
         ContractStats {
