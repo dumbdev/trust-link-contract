@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use soroban_sdk::{testutils::Address as _, Address, Env};
-use crate::{ContractError, EscrowState};
+use crate::{ContractError, DataKey, EscrowData, EscrowState};
 use crate::test_helpers::{setup_contract, mint_token};
 
 fn register_token(env: &Env) -> Address {
@@ -86,4 +86,60 @@ fn test_cancel_escrow_non_pending_fails() {
 
     let escrow = client.get_escrow(&id);
     assert_eq!(escrow.state, EscrowState::Funded);
+}
+
+#[test]
+fn test_buyer_can_cancel_if_preassigned_before_funding() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token = register_token(&env);
+    let (_contract_id, client, _admin, _fee_collector) = setup_contract(&env);
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let resolver = Address::generate(&env);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &500_i128, &0_u32, &3600_u64);
+
+    // Simulate a workflow where a buyer has already been assigned off-chain
+    // before funding occurs. The escrow is still Pending, so cancellation is legal.
+    let mut escrow: EscrowData = env.as_contract(&client.address, || {
+        env.storage().persistent().get(&DataKey::Escrow(id))
+    })
+    .expect("escrow exists");
+    escrow.buyer = Some(buyer.clone());
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(&DataKey::Escrow(id), &escrow);
+    });
+
+    client.cancel_escrow(&buyer, &id);
+
+    let cancelled = client.get_escrow(&id);
+    assert_eq!(cancelled.state, EscrowState::Cancelled);
+}
+
+#[test]
+fn test_cancelled_escrow_cannot_be_funded() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token = register_token(&env);
+    let (_contract_id, client, _admin, _fee_collector) = setup_contract(&env);
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let resolver = Address::generate(&env);
+
+    mint_token(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &0_u32, &3600_u64);
+    client.cancel_escrow(&seller, &id);
+
+    let fund_result = client.try_fund_escrow(&id, &buyer);
+    assert!(matches!(fund_result, Err(Ok(ContractError::InvalidState))));
+
+    let escrow = client.get_escrow(&id);
+    assert_eq!(escrow.state, EscrowState::Canceled);
+    assert_eq!(soroban_sdk::token::Client::new(&env, &token).balance(&buyer), 1000);
 }

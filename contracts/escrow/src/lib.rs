@@ -507,7 +507,8 @@ impl Escrow {
         ensure_not_paused(&env)?;
         let mut escrow = load_escrow(&env, escrow_id)?;
 
-        if escrow.seller != caller {
+        let buyer = escrow.buyer.clone();
+        if escrow.seller != caller && buyer.as_ref() != Some(&caller) {
             return Err(ContractError::NotAuthorized);
         }
 
