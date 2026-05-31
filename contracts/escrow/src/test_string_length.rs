@@ -30,7 +30,11 @@ fn test_tracking_id_at_limit_succeeds() {
     let id = create_funded_escrow(&env, &client, &seller, &buyer, &resolver, &token, 100, 0, 3600);
     // Exactly MAX_TRACKING_ID_LEN characters — must succeed
     let tracking = make_string(&env, MAX_TRACKING_ID_LEN);
-    client.mark_shipped(&id, &tracking);
+    client.mark_shipped(&seller, &id, &tracking);
+    
+    // Verify the full boundary string is recorded precisely as intended
+    let escrow = client.get_escrow(&id);
+    assert_eq!(escrow.tracking_id, Some(tracking));
 }
 
 #[test]
@@ -45,7 +49,7 @@ fn test_tracking_id_over_limit_reverts() {
     let id = create_funded_escrow(&env, &client, &seller, &buyer, &resolver, &token, 100, 0, 3600);
     // One character over the limit — must revert
     let tracking = make_string(&env, MAX_TRACKING_ID_LEN + 1);
-    let res = client.try_mark_shipped(&id, &tracking);
+    let res = client.try_mark_shipped(&seller, &id, &tracking);
     assert!(matches!(res, Err(Ok(ContractError::InputTooLong))));
 }
 
@@ -63,7 +67,9 @@ fn test_description_at_limit_succeeds() {
     let id = create_funded_escrow(&env, &client, &seller, &buyer, &resolver, &token, 100, 0, 3600);
     // Exactly MAX_DESCRIPTION_LEN characters — must succeed
     let desc = make_string(&env, MAX_DESCRIPTION_LEN);
+    client.mark_shipped(&seller, &id, &SorobanString::from_str(&env, "TRACK-DESC"));
     client.raise_dispute(
+        &buyer,
         &id,
         &Symbol::new(&env, "reason"),
         &desc,
@@ -84,6 +90,7 @@ fn test_description_over_limit_reverts() {
     // One character over the limit — must revert
     let desc = make_string(&env, MAX_DESCRIPTION_LEN + 1);
     let res = client.try_raise_dispute(
+        &buyer,
         &id,
         &Symbol::new(&env, "reason"),
         &desc,
