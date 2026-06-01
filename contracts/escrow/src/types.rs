@@ -70,6 +70,7 @@ pub enum ContractError {
     InputTooLong = 17,
     InvalidAddress = 18,
     InvalidTrackingId = 18,
+    DeliveryNotRecorded = 19,
 }
 
 /// Lifecycle states of an escrow transaction.
@@ -115,8 +116,8 @@ pub struct EscrowData {
     pub state: EscrowState,
     /// Ledger timestamp recorded when the seller marked the order as shipped.
     pub shipped_at: u64,
-    /// Ledger timestamp recorded by the admin oracle when delivery is confirmed. Zero until set.
-    pub delivered_at: u64,
+    /// Ledger timestamp recorded by the admin oracle when delivery is confirmed. None until set.
+    pub delivered_at: Option<u64>,
     pub tracking_id: Option<String>,
 }
 
