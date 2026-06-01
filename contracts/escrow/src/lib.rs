@@ -458,7 +458,7 @@ impl Escrow {
     pub fn create_escrow(
         env: Env,
         seller: Address,
-        buyer: Option<Address>,
+        buyer: Address,
         resolver: Address,
         token: Address,
         amount: i128,
@@ -496,7 +496,7 @@ impl Escrow {
 
         let escrow = EscrowData {
             seller,
-            buyer,
+            buyer: Some(buyer),
             resolver,
             token,
             amount,
@@ -571,7 +571,15 @@ impl Escrow {
             return Err(ContractError::InvalidState);
         }
 
-        escrow.buyer = Some(buyer.clone());
+        // 1. First, retrieve the designated buyer already registered inside the stored escrow state
+        let designated_buyer = escrow.buyer.as_ref().ok_or(ContractError::NotAuthorized)?;
+
+        // 2. Enforce authorization check BEFORE mutating any struct fields
+        if &buyer != designated_buyer {
+            return Err(ContractError::NotAuthorized);
+        }
+
+        // 3. Mark the ledger updates safely
         escrow.state = EscrowState::Funded;
         escrow.funded_at = env.ledger().timestamp();
         escrow.dispute_deadline = escrow.funded_at + DISPUTE_WINDOW;
