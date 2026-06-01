@@ -13,6 +13,7 @@ pub enum DataKey {
     TtlExtensionLedgers,
     ArbitrationFee,
     TotalArbitrationFees(Address),
+    AccumulatedFees(Address),
     TotalCreated,
     TotalCompleted,
     TotalDisputed,
@@ -69,7 +70,11 @@ pub enum ContractError {
     ArithmeticOverflow = 15,
     InvalidStateTransition = 16,
     InputTooLong = 17,
-    InvalidTrackingId = 18,
+    InvalidAddress = 18,
+    SameAddress = 19,
+    AmountExceedsMaximum = 20,
+    InvalidTrackingId = 21,
+    DeliveryNotRecorded = 22,
 }
 
 /// Lifecycle states of an escrow transaction.
@@ -115,8 +120,8 @@ pub struct EscrowData {
     pub state: EscrowState,
     /// Ledger timestamp recorded when the seller marked the order as shipped.
     pub shipped_at: u64,
-    /// Ledger timestamp recorded by the admin oracle when delivery is confirmed. Zero until set.
-    pub delivered_at: u64,
+    /// Ledger timestamp recorded by the admin oracle when delivery is confirmed. None until set.
+    pub delivered_at: Option<u64>,
     pub tracking_id: Option<String>,
 }
 
@@ -151,6 +156,15 @@ pub struct ContractConfig {
     pub admin: Address,
     pub fee_bps: u32,
     pub fee_collector: Address,
+    pub escrow_count: u64,
+}
+
+/// Public-safe contract configuration (no privileged addresses).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicContractConfig {
+    pub fee_bps: u32,
+    pub paused: bool,
     pub escrow_count: u64,
 }
 
