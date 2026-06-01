@@ -9,7 +9,7 @@
 use crate::{ContractError, Escrow, EscrowClient, EscrowState};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    token, Address, Env, String as SorobanString,
+    token, Address, BytesN, Env, String as SorobanString, Symbol,
 };
 
 const DISPUTE_WINDOW_SECS: u64 = 172_800; // 48h, matches the contract constant.
@@ -42,7 +42,7 @@ fn setup_funded_and_shipped() -> Fx {
 
     let amount: i128 = 1_000;
     // shipping_window=0 isolates the dispute-window assertion the issue cares about.
-    let escrow_id = client.create_escrow(&seller, &resolver, &token_addr, &amount, &0_u32, &0_u64);
+    let escrow_id = client.create_escrow(&seller, &None::<Address>, &resolver, &token_addr, &amount, &0_u32, &0_u64);
     token::StellarAssetClient::new(&env, &token_addr).mint(&buyer, &amount);
     client.fund_escrow(&escrow_id, &buyer);
     client.mark_shipped(&seller, &escrow_id, &soroban_sdk::String::from_str(&env, "TRACK001"));
@@ -102,61 +102,46 @@ fn auto_release_fails_when_dispute_is_active() {
     let resolver = Address::generate(&env);
     let fee_collector = Address::generate(&env);
 
-    // Create token contract
     let token_admin = Address::generate(&env);
-    let token = create_token_contract(&env, &token_admin);
+    let sac = env.register_stellar_asset_contract_v2(token_admin);
+    let token_addr = sac.address();
+    token::StellarAssetClient::new(&env, &token_addr).mint(&buyer, &1_000_i128);
 
-    // Mint buyer tokens
-    token.mint(&buyer, &1_000);
-
-    // Deploy escrow contract
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector, &0_u32);
 
-    // Initialize contract
-    client.initialize(&admin, &fee_collector, &0);
-
-    // Create escrow
     let escrow_id = client.create_escrow(
         &seller,
+        &None::<Address>,
         &resolver,
-        &token.address,
-        &500,
-        &0,
-        &100,
+        &token_addr,
+        &500_i128,
+        &0_u32,
+        &100_u64,
     );
 
-    // Fund escrow
     client.fund_escrow(&escrow_id, &buyer);
+    client.mark_shipped(&seller, &escrow_id, &SorobanString::from_str(&env, "TRK-DISPUTE"));
 
-    // Raise dispute
     client.raise_dispute(
+        &buyer,
         &escrow_id,
         &Symbol::new(&env, "damaged"),
-        &String::from_str(&env, "item damaged"),
-        &BytesN::from_array(&env, &[0; 32]),
+        &SorobanString::from_str(&env, "item damaged"),
+        &BytesN::from_array(&env, &[0u8; 32]),
     );
 
-    // Advance ledger time past release window
     env.ledger().with_mut(|li| {
-        li.timestamp += DISPUTE_WINDOW + 200;
+        li.timestamp += DISPUTE_WINDOW_SECS + 200;
     });
 
-    // Contract balance before release attempt
-    let balance_before = token.balance(&contract_id);
+    let balance_before = token::Client::new(&env, &token_addr).balance(&contract_id);
 
-    // Attempt auto release
     let result = client.try_auto_release(&escrow_id);
+    assert_eq!(result, Err(Ok(ContractError::InvalidState)));
 
-    // Verify explicit error
-    assert_eq!(
-        result,
-        Err(Ok(ContractError::InvalidState))
-    );
-
-    // Ensure funds remain locked
-    let balance_after = token.balance(&contract_id);
-
+    let balance_after = token::Client::new(&env, &token_addr).balance(&contract_id);
     assert_eq!(balance_before, balance_after);
     assert_eq!(balance_after, 500);
 }

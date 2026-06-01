@@ -13,6 +13,7 @@ pub enum DataKey {
     TtlExtensionLedgers,
     ArbitrationFee,
     TotalArbitrationFees(Address),
+    AccumulatedFees(Address),
     TotalCreated,
     TotalCompleted,
     TotalDisputed,
@@ -69,8 +70,10 @@ pub enum ContractError {
     InvalidStateTransition = 16,
     InputTooLong = 17,
     InvalidAddress = 18,
-    InvalidTrackingId = 18,
-    DeliveryNotRecorded = 19,
+    SameAddress = 19,
+    AmountExceedsMaximum = 20,
+    InvalidTrackingId = 21,
+    DeliveryNotRecorded = 22,
 }
 
 /// Lifecycle states of an escrow transaction.
