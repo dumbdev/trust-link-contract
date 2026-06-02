@@ -70,6 +70,8 @@ pub fn transition_state(
             (Pending, Funded)
                 | (Pending, Canceled)
                 | (Funded, Shipped)
+                | (Funded, Completed)
+                | (Funded, Disputed)
                 | (Funded, Refunded)
                 | (Shipped, Completed)
                 | (Shipped, Disputed)
@@ -754,6 +756,29 @@ impl Escrow {
             return Err(ContractError::NotAuthorized);
         }
 
+        if escrow.state != EscrowState::Shipped && escrow.state != EscrowState::Funded {
+            return Err(ContractError::InvalidState);
+        }
+
+        if env.ledger().timestamp() >= escrow.dispute_deadline {
+            return Err(ContractError::DisputeWindowClosed);
+        }
+
+        if description.len() > MAX_DESCRIPTION_LEN {
+            return Err(ContractError::InputTooLong);
+        }
+
+        escrow.state = EscrowState::Disputed;
+
+        let dispute_data = DisputeData {
+            escrow_id,
+            reason,
+            description,
+            evidence_hash,
+            status: DisputeStatus::Active,
+            disputed_at: env.ledger().timestamp(),
+            tracking_id: escrow.tracking_id.clone(),
+        };
         Ok(net_vendor_payout)
     }
 
