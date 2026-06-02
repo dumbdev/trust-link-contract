@@ -524,10 +524,9 @@ impl Escrow {
         }
 
         escrow.state = EscrowState::Canceled;
-        env.storage().persistent().set(&DataKey::Escrow(counter), &escrow_data);
-        env.storage().instance().set(&DataKey::EscrowCounter, &(counter + 1));
-
-        counter
+        env.storage().persistent().set(&DataKey::Escrow(escrow_id), &escrow);
+        emit_escrow_cancelled(&env, escrow_id, escrow.seller);
+        Ok(())
     }
 
     pub fn fund_escrow(env: Env, escrow_id: u32, buyer: Address) {
@@ -592,6 +591,8 @@ impl Escrow {
 
     pub fn get_escrow(env: Env, escrow_id: u32) -> EscrowData {
         env.storage().persistent().get(&DataKey::Escrow(escrow_id)).expect("Escrow instance data payload not found.")
+    }
+
     pub fn resolve_dispute(env: Env, caller: Address, escrow_id: u64, resolution: ResolutionType) -> Result<(), ContractError> {
         caller.require_auth();
         ensure_not_paused(&env)?;
