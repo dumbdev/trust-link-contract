@@ -69,8 +69,8 @@ pub enum ContractError {
     InvalidStateTransition = 16,
     InputTooLong = 17,
     InvalidAddress = 18,
-    InvalidTrackingId = 18,
-    DeliveryNotRecorded = 19,
+    InvalidTrackingId = 21,
+    DeliveryNotRecorded = 22,
 }
 
 /// Lifecycle states of an escrow transaction.

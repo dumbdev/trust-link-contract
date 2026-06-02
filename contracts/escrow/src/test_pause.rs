@@ -187,3 +187,4 @@ fn test_unpause_resumes_operations() {
     let second_id = client.create_escrow(&seller, &resolver, &token, &50_i128, &50_u32, &3600_u64);
     assert_eq!(second_id, 2);
 }
+}

@@ -99,6 +99,7 @@ fn test_buyer_index_populated_on_cancel_by_buyer() {
     let escrows = client.get_escrows_by_buyer(&buyer);
     assert_eq!(escrows.len(), 1);
     assert_eq!(escrows.get(0).unwrap(), id);
+}
 // ---------------------------------------------------------------------------
 // Fee rounding / dust edge cases (#fee_calculator)
 //
