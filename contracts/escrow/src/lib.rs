@@ -70,7 +70,6 @@ pub fn transition_state(
             (Pending, Funded)
                 | (Pending, Canceled)
                 | (Funded, Shipped)
-                | (Funded, Completed)
                 | (Funded, Refunded)
                 | (Shipped, Completed)
                 | (Shipped, Disputed)
@@ -739,49 +738,24 @@ impl Escrow {
         Ok(())
     }
 
-    pub fn raise_dispute(
-        env: Env,
-        caller: Address,
-        escrow_id: u64,
-        reason: Symbol,
-        description: String,
-        evidence_hash: BytesN<32>,
-    ) -> Result<(), ContractError> {
-        caller.require_auth();
+    pub fn confirm_delivery(env: Env, escrow_id: u32) -> Result<i128, ContractError> {
+        let mut escrow = Self::get_escrow(env.clone(), escrow_id);
+        let buyer = escrow.buyer.clone().expect("Escrow has no designated funding buyer profile context.");
+        buyer.require_auth();
 
-        ensure_not_paused(&env)?;
-        let mut escrow = load_escrow(&env, escrow_id)?;
+        transition_state(&escrow.state, &EscrowState::Completed)?;
+
+        // Enforce parsing calculation based strictly on the immutable snapshotted instance fee
+        let fee_payout = (escrow.amount * escrow.fee_bps as i128) / 10000;
+        let net_vendor_payout = escrow.amount - fee_payout;
 
         let buyer = escrow.buyer.clone().ok_or(ContractError::EscrowHasNoBuyer)?;
         if caller != buyer {
             return Err(ContractError::NotAuthorized);
         }
 
-        require_state!(escrow, EscrowState::Funded);
-        assert!(
-            env.ledger().timestamp() >= escrow.dispute_deadline,
-            "dispute window not closed"
-        );
-
-        if env.ledger().timestamp() >= escrow.dispute_deadline {
-            return Err(ContractError::DisputeWindowClosed);
-        }
-
-        if description.len() > MAX_DESCRIPTION_LEN {
-            return Err(ContractError::InputTooLong);
-        }
-
-        escrow.state = EscrowState::Disputed;
-
-        let dispute_data = DisputeData {
-            escrow_id,
-            reason,
-            description,
-            evidence_hash,
-            status: DisputeStatus::Active,
-            disputed_at: env.ledger().timestamp(),
-            tracking_id: escrow.tracking_id.clone(),
-        };
+        Ok(net_vendor_payout)
+    }
 
         save_escrow(&env, escrow_id, &escrow);
         save_dispute(&env, escrow_id, &dispute_data);
