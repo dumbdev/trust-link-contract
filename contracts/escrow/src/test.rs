@@ -9,7 +9,7 @@ use crate::{
     EscrowCompleted, EscrowCreated, EscrowFunded, EscrowState, ResolutionType,
 };
 
-fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address) {
+fn setup_env() -> (Env, Address, Address, Address, Address, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -76,10 +76,18 @@ where
 
 #[test]
 fn test_create_escrow() {
+<<<<<<< HEAD
     let (env, admin, seller, _buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+    let (env, admin, seller, _buyer, resolver, _token_admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     let id = client.create_escrow(&seller, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &3600_u64);
     assert_eq!(id, 1u32);
@@ -97,10 +105,18 @@ fn test_create_escrow() {
 
 #[test]
 fn test_fund_escrow() {
+<<<<<<< HEAD
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -115,11 +131,19 @@ fn test_fund_escrow() {
 
 #[test]
 fn test_confirm_delivery() {
+<<<<<<< HEAD
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
     client.set_protocol_fee(&admin, &200_u32);
+=======
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -140,10 +164,18 @@ fn test_confirm_delivery() {
 
 #[test]
 fn test_raise_and_resolve_dispute_release_to_seller() {
+<<<<<<< HEAD
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -168,10 +200,18 @@ fn test_raise_and_resolve_dispute_release_to_seller() {
 
 #[test]
 fn test_raise_and_resolve_dispute_refund_buyer() {
+<<<<<<< HEAD
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -195,11 +235,19 @@ fn test_raise_and_resolve_dispute_refund_buyer() {
 
 #[test]
 fn test_auto_release() {
+<<<<<<< HEAD
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
     client.set_protocol_fee(&admin, &200_u32);
+=======
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -657,11 +705,21 @@ fn test_auto_release_after_dispute_deadline() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_fee_change_does_not_affect_funded_escrow() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+#[should_panic(expected = "escrow not pending")]
+fn test_fund_non_pending_escrow_fails() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1_000_000);
 
@@ -709,11 +767,22 @@ fn test_event_integrity_escrow_created() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_event_integrity_escrow_funded() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let cid = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &cid);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+#[should_panic(expected = "shipping window not elapsed")]
+fn test_auto_release_before_window_fails() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
     mint_tokens(&env, &token, &buyer, 1000);
 
     let escrow_id = client.create_escrow(&seller, &None::<Address>, &resolver, &token, &500_i128, &150_u32, &7200_u64);
@@ -727,6 +796,7 @@ fn test_event_integrity_escrow_funded() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_event_integrity_escrow_completed_via_confirm_delivery() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let cid = env.register(Escrow, ());
@@ -737,6 +807,20 @@ fn test_event_integrity_escrow_completed_via_confirm_delivery() {
     let escrow_id = client.create_escrow(&seller, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
     client.fund_escrow(&escrow_id, &buyer);
     client.mark_shipped(&seller, &escrow_id, &SorobanString::from_str(&env, "TRK-EVT-CD"));
+=======
+#[should_panic(expected = "evidence_hash must be exactly 32 bytes")]
+fn test_raise_dispute_invalid_evidence_hash_rejected() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &100_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     let escrow = client.get_escrow(&escrow_id);
     env.ledger().set_timestamp(escrow.dispute_deadline + 1);
@@ -751,6 +835,7 @@ fn test_event_integrity_escrow_completed_via_confirm_delivery() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_event_integrity_dispute_raised() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let cid = env.register(Escrow, ());
@@ -761,6 +846,20 @@ fn test_event_integrity_dispute_raised() {
     let escrow_id = client.create_escrow(&seller, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
     client.fund_escrow(&escrow_id, &buyer);
     client.mark_shipped(&seller, &escrow_id, &SorobanString::from_str(&env, "TRK-EVT-DR"));
+=======
+#[should_panic(expected = "escrow not funded")]
+fn test_raise_dispute_only_once() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 1000);
+
+    let id = client.create_escrow(&seller, &resolver, &token, &100_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     let evidence = BytesN::from_array(&env, &[42u8; 32]);
     client.raise_dispute(
@@ -779,6 +878,7 @@ fn test_event_integrity_dispute_raised() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_event_integrity_dispute_resolved_release_to_seller() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let cid = env.register(Escrow, ());
@@ -797,6 +897,14 @@ fn test_event_integrity_dispute_resolved_release_to_seller() {
         &BytesN::from_array(&env, &[0u8; 32]),
     );
     client.resolve_dispute(&resolver, &escrow_id, &ResolutionType::Release);
+=======
+fn test_multiple_escrows() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     assert!(has_event::<DisputeResolved, _>(&env, &cid, "dispute_resolved", |ev| {
         ev.escrow_id == escrow_id as u64
@@ -910,16 +1018,27 @@ fn test_event_integrity_full_lifecycle_all_events_decoded() {
     }));
 }
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // cancel_escrow tests — Issue #89
 // ---------------------------------------------------------------------------
+=======
+#[test]
+fn test_zero_fee_no_collector_transfer() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
 #[test]
 fn test_cancel_escrow_by_buyer_refunds_full_amount() {
     let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
+<<<<<<< HEAD
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &fee_collector, &0_u32);
+=======
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -941,11 +1060,21 @@ fn test_cancel_escrow_by_buyer_refunds_full_amount() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_cancel_escrow_state_transitions_correctly() {
     let (env, admin, seller, buyer, resolver, token, _fee_collector) = setup_env();
     let contract_id = env.register(Escrow, ());
     let client = EscrowClient::new(&env, &contract_id);
     client.initialize(&admin, &_fee_collector, &0_u32);
+=======
+#[should_panic(expected = "fee exceeds maximum")]
+fn test_fee_exceeds_max_bps_fails() {
+    let (env, admin, seller, _buyer, resolver, _token_admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+>>>>>>> 7c0b9a0 (feat: implement issues #205, #206, #209)
 
     mint_tokens(&env, &token, &buyer, 1000);
 
@@ -1056,4 +1185,241 @@ fn test_cancel_escrow_preserves_escrow_metadata() {
     assert_eq!(escrow.fee_bps, 250);
     assert_eq!(escrow.shipping_window, 86400);
     assert_eq!(escrow.state, EscrowState::Refunded);
+}
+
+
+// ============ Tests for Issue #206: Pagination ============
+
+#[test]
+fn test_get_escrows_by_vendor_paginated() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    // Create 5 escrows for the same seller
+    let mut ids = Vec::new(&env);
+    for i in 1..=5 {
+        let id = client.create_escrow(&seller, &resolver, &token, &(i * 100), &200_u32, &3600_u64);
+        ids.push_back(id);
+    }
+
+    // Test first page (offset 0, limit 2)
+    let page1 = client.get_escrows_by_vendor(&seller, &0, &2).unwrap();
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page1.get(0).unwrap(), ids.get(0).unwrap());
+    assert_eq!(page1.get(1).unwrap(), ids.get(1).unwrap());
+
+    // Test second page (offset 2, limit 2)
+    let page2 = client.get_escrows_by_vendor(&seller, &2, &2).unwrap();
+    assert_eq!(page2.len(), 2);
+    assert_eq!(page2.get(0).unwrap(), ids.get(2).unwrap());
+    assert_eq!(page2.get(1).unwrap(), ids.get(3).unwrap());
+
+    // Test last page (offset 4, limit 10)
+    let page3 = client.get_escrows_by_vendor(&seller, &4, &10).unwrap();
+    assert_eq!(page3.len(), 1);
+    assert_eq!(page3.get(0).unwrap(), ids.get(4).unwrap());
+
+    // Test count
+    assert_eq!(client.get_escrow_count_by_vendor(&seller), 5);
+}
+
+#[test]
+fn test_get_escrows_by_buyer_paginated() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 5000);
+
+    // Create and fund 3 escrows
+    let mut ids = Vec::new(&env);
+    for i in 1..=3 {
+        let id = client.create_escrow(&seller, &resolver, &token, &(i * 100), &200_u32, &3600_u64);
+        client.fund_escrow(&id, &buyer);
+        ids.push_back(id);
+    }
+
+    // Test pagination
+    let page = client.get_escrows_by_buyer(&buyer, &0, &2).unwrap();
+    assert_eq!(page.len(), 2);
+    
+    let all = client.get_escrows_by_buyer(&buyer, &0, &50).unwrap();
+    assert_eq!(all.len(), 3);
+
+    // Test count
+    assert_eq!(client.get_escrow_count_by_buyer(&buyer), 3);
+}
+
+#[test]
+fn test_pagination_limit_exceeded() {
+    let (env, admin, seller, _buyer, resolver, _token_admin, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    client.create_escrow(&seller, &resolver, &token, &100, &200_u32, &3600_u64);
+
+    // Try to exceed MAX_PAGE_SIZE (50)
+    let result = client.try_get_escrows_by_vendor(&seller, &0, &51);
+    assert!(result.is_err());
+}
+
+// ============ Tests for Issue #205: Configurable Windows ============
+
+#[test]
+fn test_update_dispute_window() {
+    let (env, admin, _seller, _buyer, _resolver, _token_admin, _token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    // Default is 172_800 (48 hours)
+    let config = client.get_config();
+    assert_eq!(config.dispute_window_secs, 172_800);
+
+    // Update to 86_400 (24 hours)
+    client.update_dispute_window(&admin, &86_400).unwrap();
+
+    let config = client.get_config();
+    assert_eq!(config.dispute_window_secs, 86_400);
+}
+
+#[test]
+fn test_update_delivery_window() {
+    let (env, admin, _seller, _buyer, _resolver, _token_admin, _token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    // Default is 172_800 (48 hours)
+    let config = client.get_config();
+    assert_eq!(config.delivery_release_window_secs, 172_800);
+
+    // Update to 259_200 (72 hours)
+    client.update_delivery_window(&admin, &259_200).unwrap();
+
+    let config = client.get_config();
+    assert_eq!(config.delivery_release_window_secs, 259_200);
+}
+
+#[test]
+fn test_window_update_boundaries() {
+    let (env, admin, _seller, _buyer, _resolver, _token_admin, _token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    // Too short (less than 1 hour)
+    let result = client.try_update_dispute_window(&admin, &3_599);
+    assert!(result.is_err());
+
+    // Too long (more than 30 days)
+    let result = client.try_update_dispute_window(&admin, &2_592_001);
+    assert!(result.is_err());
+
+    // Valid boundaries
+    assert!(client.try_update_dispute_window(&admin, &3_600).is_ok());  // 1 hour
+    assert!(client.try_update_dispute_window(&admin, &2_592_000).is_ok());  // 30 days
+}
+
+// ============ Tests for Issue #209: Withdraw Fees Guard ============
+
+#[test]
+fn test_withdraw_fees_with_guard() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 2000);
+
+    // Create and complete an escrow (generates fees)
+    let id = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id, &buyer);
+    client.confirm_delivery(&id);
+
+    // Fee is 20 (2% of 1000), contract has 20 in fees
+    let accumulated = client.get_accumulated_fees(&token);
+    assert_eq!(accumulated, 20);
+
+    // Withdraw the fees
+    client.withdraw_fees(&admin, &token, &20).unwrap();
+
+    assert_eq!(client.get_accumulated_fees(&token), 0);
+    assert_eq!(get_balance(&env, &token, &fee_collector), 40); // 20 from deduction + 20 withdrawn
+}
+
+#[test]
+fn test_withdraw_fees_respects_locked_balance() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 3000);
+
+    // Create and complete one escrow (generates 20 in fees)
+    let id1 = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id1, &buyer);
+    client.confirm_delivery(&id1);
+
+    // Create and fund another escrow (locks 1000)
+    let id2 = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id2, &buyer);
+
+    // Contract now has: 20 (fees from id1) + 1000 (locked for id2) = 1020
+    // Locked balance is 1000
+    assert_eq!(client.get_locked_balance(&token), 1000);
+    assert_eq!(get_balance(&env, &token, &contract_id), 1020);
+
+    // Try to withdraw 21 - should fail (contract would have 999, less than locked 1000)
+    let result = client.try_withdraw_fees(&admin, &token, &21);
+    assert!(result.is_err());
+
+    // Withdraw 20 - should succeed
+    client.withdraw_fees(&admin, &token, &20).unwrap();
+    assert_eq!(get_balance(&env, &token, &contract_id), 1000);
+}
+
+#[test]
+fn test_locked_balance_tracking() {
+    let (env, admin, seller, buyer, resolver, token, fee_collector) = setup_env();
+
+    let contract_id = env.register(Escrow, ());
+    let client = super::EscrowClient::new(&env, &contract_id);
+    client.initialize(&admin, &fee_collector);
+
+    mint_tokens(&env, &token, &buyer, 3000);
+
+    // Initially zero
+    assert_eq!(client.get_locked_balance(&token), 0);
+
+    // Fund escrow - locks 1000
+    let id1 = client.create_escrow(&seller, &resolver, &token, &1000_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id1, &buyer);
+    assert_eq!(client.get_locked_balance(&token), 1000);
+
+    // Fund another - locks another 500
+    let id2 = client.create_escrow(&seller, &resolver, &token, &500_i128, &200_u32, &3600_u64);
+    client.fund_escrow(&id2, &buyer);
+    assert_eq!(client.get_locked_balance(&token), 1500);
+
+    // Complete first - unlocks 1000
+    client.confirm_delivery(&id1);
+    assert_eq!(client.get_locked_balance(&token), 500);
+
+    // Complete second - unlocks 500
+    client.confirm_delivery(&id2);
+    assert_eq!(client.get_locked_balance(&token), 0);
 }
