@@ -31,8 +31,10 @@ pub enum ContractError {
     DisputeNotFound = 11,
     /// Returned when internal checked arithmetic fails while computing a payout or fee.
     ArithmeticError = 12,
-    /// Returned when the dispute window has closed for the requested escrow action.
-    DisputeWindowClosed = 13,
+    /// Returned when delivery is attempted before the dispute window opens.
+    /// The name clarifies the condition: you cannot confirm delivery until
+    /// the dispute window has closed.
+    DeliveryBeforeDisputeWindow = 13,
     /// Returned when a contract action is blocked because the contract is paused.
     ContractPaused = 14,
     /// Returned when checked arithmetic overflows in helper payout calculations.

@@ -1,6 +1,4 @@
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Symbol};
+use soroban_sdk::{contracttype, Address, BytesN, String, Symbol};
 
 /// Storage keys for persisting escrow data and the global escrow counter.
 #[contracttype]
@@ -43,7 +41,6 @@ pub struct DisputeData {
     pub tracking_id: Option<String>,
 }
 
-/// Resolution direction for `resolve_dispute`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ResolutionType {
@@ -51,32 +48,41 @@ pub enum ResolutionType {
     Refund,
 }
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum ContractError {
-    InvalidAmount = 1,
-    InsufficientBalance = 2,
-    EscrowNotFound = 3,
-    InvalidState = 4,
-    NotAuthorized = 5,
-    AlreadyInitialized = 6,
-    FeeExceedsMax = 7,
-    EscrowHasNoBuyer = 8,
-    ShippingWindowNotElapsed = 9,
-    InvalidEvidenceHash = 10,
-    DisputeNotFound = 11,
-    ArithmeticError = 12,
-    DisputeWindowClosed = 13,
-    ContractPaused = 14,
-    ArithmeticOverflow = 15,
-    InvalidStateTransition = 16,
-    InputTooLong = 17,
-    InvalidAddress = 18,
-    SameAddress = 19,
-    AmountExceedsMaximum = 20,
-    InvalidTrackingId = 21,
-    DeliveryNotRecorded = 22,
+/// Configuration for protocol and arbitration fee rates in basis points.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub protocol_fee_bps: u32,
+    pub arbitration_fee_bps: u32,
+}
+
+/// Public-safe contract configuration (no sensitive addresses).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicContractConfig {
+    pub fee_bps: u32,
+    pub paused: bool,
+    pub escrow_count: u64,
+}
+
+/// Full contract configuration including privileged addresses.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractConfig {
+    pub admin: Address,
+    pub fee_bps: u32,
+    pub fee_collector: Address,
+    pub escrow_count: u64,
+}
+
+/// On-chain counters for escrow lifecycle events.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractStats {
+    pub total_created: u64,
+    pub total_completed: u64,
+    pub total_disputed: u64,
+    pub total_refunded: u64,
 }
 
 /// Lifecycle states of an escrow transaction.
@@ -89,30 +95,5 @@ pub enum EscrowState {
     Completed,
     Disputed,
     Refunded,
-    Cancelled,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    Admin,
-    DefaultFeeBps,
-    EscrowCounter,
-    Escrow(u32),
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EscrowData {
-    pub seller: Address,
-    pub buyer: Option<Address>,
-    pub resolver: Address,
-    pub token: Address,
-    pub amount: i128,
-    pub shipping_window: u64,
-    pub fee_bps: u32, // Snapshot parameter tracking slot
-    pub funded_at: u64,
-    pub shipped_at: u64,
-    pub created_at: u64,
-    pub state: EscrowState,
+    Canceled,
 }

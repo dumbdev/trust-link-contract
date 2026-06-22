@@ -87,7 +87,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(Ok(ContractError::DisputeWindowClosed)),
+            Err(Ok(ContractError::DeliveryBeforeDisputeWindow)),
             "raise_dispute must revert after fallback deadline"
         );
     }
@@ -143,7 +143,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(Ok(ContractError::DisputeWindowClosed)),
+            Err(Ok(ContractError::DeliveryBeforeDisputeWindow)),
             "raise_dispute must revert at the exact fallback deadline"
         );
     }
@@ -169,7 +169,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(Ok(ContractError::DisputeWindowClosed)),
+            Err(Ok(ContractError::DeliveryBeforeDisputeWindow)),
             "[REGRESSION] Infinite dispute window bug must be fixed"
         );
     }

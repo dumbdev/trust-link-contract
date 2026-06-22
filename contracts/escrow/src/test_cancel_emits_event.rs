@@ -27,7 +27,7 @@ fn test_cancel_emits_event() {
 
     // Verify the escrow state is Cancelled
     let escrow = client.get_escrow(&id);
-    assert_eq!(escrow.state, EscrowState::Cancelled);
+    assert_eq!(escrow.state, EscrowState::Canceled);
 
     // Verify that an EscrowCancelled event was emitted
     let events = env.events().all();
