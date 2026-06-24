@@ -16,13 +16,20 @@ fn test_resolve_dispute_refund_no_buyer_returns_error() {
     let token = Address::generate(&env);
     let id: u64 = 42;
 
+    let mut payees = soroban_sdk::Vec::new(&env);
+    payees.push_back(crate::types::Payee {
+        address: seller.clone(),
+        bps: 10000,
+    });
+
     let escrow = EscrowData {
-        seller: seller.clone(),
+        payees,
         buyer: None,
         resolver: resolver.clone(),
         token: token.clone(),
         amount: 1_000_000,
         fee_bps: 0,
+        resolver_fee_bps: 0,
         shipping_window: 0,
         funded_at: env.ledger().timestamp(),
         dispute_deadline: env.ledger().timestamp() + 1000,

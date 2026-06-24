@@ -107,7 +107,7 @@ fn test_vendor_escrow_data_integrity_and_state_transitions() {
 
     // Assert initial state and data integrity
     let escrow = client.get_escrow(&id);
-    assert_eq!(escrow.seller, vendor);
+    assert_eq!(escrow.seller(), vendor);
     assert_eq!(escrow.state, EscrowState::Pending);
     assert_eq!(escrow.amount, 1000);
 

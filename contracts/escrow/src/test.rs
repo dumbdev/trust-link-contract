@@ -97,7 +97,7 @@ fn test_create_escrow() {
 
     let payees = single_payee(&env, &seller);
 
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
     assert_eq!(id, 1u64);
 
     let escrow = client.get_escrow(&id);
@@ -122,7 +122,7 @@ fn test_fund_escrow() {
     mint_tokens(&env, &token, &buyer, 1000);
 
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
 
     let escrow = client.get_escrow(&id);
@@ -142,7 +142,7 @@ fn test_confirm_delivery() {
     mint_tokens(&env, &token, &buyer, 1000);
 
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     client.mark_shipped(&seller, &id, &SorobanString::from_str(&env, "TRACK-010"));
 
@@ -167,7 +167,7 @@ fn test_raise_and_resolve_dispute_release_to_seller() {
     mint_tokens(&env, &token, &buyer, 1000);
 
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     client.mark_shipped(
         &seller,
@@ -200,7 +200,7 @@ fn test_raise_and_resolve_dispute_refund_buyer() {
     mint_tokens(&env, &token, &buyer, 1000);
 
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     client.mark_shipped(
         &seller,
@@ -234,7 +234,7 @@ fn test_auto_release() {
     mint_tokens(&env, &token, &buyer, 1000);
 
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &1000_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     client.mark_shipped(&seller, &id, &SorobanString::from_str(&env, "TRACK-AUTO-1"));
     env.ledger().set_timestamp(1_700_000_000);
@@ -260,7 +260,7 @@ fn test_fund_non_pending_escrow_fails() {
     client.initialize(&admin, &fee_collector, &0_u32);
     mint_tokens(&env, &token, &buyer, 1000);
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     let res = client.try_fund_escrow(&id, &buyer);
     assert!(matches!(res, Err(Ok(ContractError::InvalidState))));
@@ -275,7 +275,7 @@ fn test_auto_release_before_window_fails() {
     client.set_protocol_fee(&admin, &200_u32);
     mint_tokens(&env, &token, &buyer, 1000);
     let payees = single_payee(&env, &seller);
-    let id = client.create_escrow(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
+    let id = client.create_escrow_multi(&payees, &None::<Address>, &resolver, &token, &100_i128, &200_u32, &0_u32, &3600_u64);
     client.fund_escrow(&id, &buyer);
     client.mark_shipped(&seller, &id, &SorobanString::from_str(&env, "TRACK-AUTO-2"));
     env.ledger().set_timestamp(1_700_000_000);
@@ -1472,7 +1472,7 @@ fn test_cancel_escrow_preserves_escrow_metadata() {
     client.cancel_escrow(&seller, &id);
 
     let escrow = client.get_escrow(&id);
-    assert_eq!(escrow.seller, seller);
+    assert_eq!(escrow.seller(), seller);
     assert_eq!(escrow.buyer, Some(buyer));
     assert_eq!(escrow.resolver, resolver);
     assert_eq!(escrow.token, token);

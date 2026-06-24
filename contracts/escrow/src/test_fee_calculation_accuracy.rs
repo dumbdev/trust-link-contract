@@ -432,14 +432,21 @@ fn test_dispute_allocations_include_protocol_fee() {
     let token = Address::generate(&env);
     let fee_collector = Address::generate(&env);
 
+    let mut payees = soroban_sdk::Vec::new(&env);
+    payees.push_back(crate::types::Payee {
+        address: seller.clone(),
+        bps: 10000,
+    });
+
     // Create mock escrow with 1,000,000 stroops and 100 bps (1%) fee
     let escrow = EscrowData {
-        seller: seller.clone(),
+        payees,
         buyer: Some(buyer.clone()),
         resolver: resolver.clone(),
         token: token.clone(),
         amount: 1_000_000_i128,
         fee_bps: 100_u32, // 1%
+        resolver_fee_bps: 0,
         state: EscrowState::Disputed,
         shipping_window: 3600,
         funded_at: 0,
@@ -447,7 +454,7 @@ fn test_dispute_allocations_include_protocol_fee() {
         shipped_at: 0,
         delivered_at: None,
         tracking_id: None,
-
+        notes: None,
     };
 
     let arbitration_fee = 50_000_i128; // 5% arbitration fee
@@ -497,13 +504,20 @@ fn test_dispute_allocations_zero_fee_no_fee_transfer() {
     let token = Address::generate(&env);
     let fee_collector = Address::generate(&env);
 
+    let mut payees = soroban_sdk::Vec::new(&env);
+    payees.push_back(crate::types::Payee {
+        address: seller.clone(),
+        bps: 10000,
+    });
+
     let escrow = EscrowData {
-        seller: seller.clone(),
+        payees,
         buyer: Some(buyer.clone()),
         resolver: resolver.clone(),
         token: token.clone(),
         amount: 1_000_000_i128,
         fee_bps: 0_u32, // 0% fee
+        resolver_fee_bps: 0,
         state: EscrowState::Disputed,
         shipping_window: 3600,
         funded_at: 0,
@@ -511,7 +525,7 @@ fn test_dispute_allocations_zero_fee_no_fee_transfer() {
         shipped_at: 0,
         delivered_at: None,
         tracking_id: None,
-
+        notes: None,
     };
 
     let arbitration_fee = 50_000_i128;
