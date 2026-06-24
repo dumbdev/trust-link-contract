@@ -446,3 +446,25 @@ pub fn emit_resolver_rotated(
         },
     );
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowReclaimed {
+    pub escrow_id: u64,
+    pub buyer: Address,
+    pub amount: i128,
+    pub reclaimed_at: u64,
+}
+
+/// Topic: `("escrow_reclaimed",)`, data: `EscrowReclaimed`.
+pub fn emit_escrow_reclaimed(env: &Env, escrow_id: u64, buyer: Address, amount: i128) {
+    env.events().publish(
+        (Symbol::new(env, "escrow_reclaimed"),),
+        EscrowReclaimed {
+            escrow_id,
+            buyer,
+            amount,
+            reclaimed_at: env.ledger().timestamp(),
+        },
+    );
+}

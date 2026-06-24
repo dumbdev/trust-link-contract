@@ -96,4 +96,5 @@ pub enum EscrowState {
     Disputed,
     Refunded,
     Canceled,
+    Expired,
 }

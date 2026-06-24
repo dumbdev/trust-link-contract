@@ -58,4 +58,8 @@ pub enum ContractError {
     /// Returned when two roles that must be distinct are assigned the same address
     /// (e.g. resolver == seller, buyer == seller, or buyer == resolver).
     ConflictingRoles = 23,
+    /// Returned when an action is attempted on an escrow that has passed its expiration timestamp.
+    EscrowExpired = 24,
+    /// Returned when reclaim is attempted before the grace period after expiration has elapsed.
+    GracePeriodNotElapsed = 25,
 }

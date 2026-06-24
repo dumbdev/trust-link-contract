@@ -11,12 +11,12 @@ pub use crate::events::{
     AdminRotated, AutoReleased, ContractInitialized, ContractPausedEvent, ContractUnpausedEvent,
     DeliveryRecorded, DisputeRaised, DisputeResolved, EscrowCancelled, EscrowCompleted,
     EscrowCreated, EscrowFunded, EscrowShipped, FeeUpdated, FeesWithdrawn, ArbitrationFeeUpdated,
-    ProtocolFeeUpdated, ResolverRotated,
+    ProtocolFeeUpdated, ResolverRotated, EscrowReclaimed,
     emit_admin_rotated, emit_auto_released, emit_contract_initialized, emit_contract_paused,
     emit_contract_unpaused, emit_delivery_recorded, emit_dispute_raised, emit_dispute_resolved,
     emit_escrow_cancelled, emit_escrow_completed, emit_escrow_created, emit_escrow_funded,
     emit_escrow_shipped, emit_fee_updated, emit_fees_withdrawn, emit_arbitration_fee_updated,
-    emit_protocol_fee_updated, emit_resolver_rotated,
+    emit_protocol_fee_updated, emit_resolver_rotated, emit_escrow_reclaimed,
 };
 pub use crate::types::{
     ContractConfig, ContractStats, DataKey, DisputeData, DisputeStatus, EscrowState,
@@ -81,13 +81,16 @@ pub fn transition_state(
             (from, to),
             (Pending, Funded)
                 |     (Pending, Canceled)
+                |     (Pending, Expired)
                 | (Funded, Shipped)
                 | (Funded, Completed)
                 | (Funded, Disputed)
                 | (Funded, Refunded)
+                | (Funded, Expired)
                 | (Shipped, Completed)
                 | (Shipped, Disputed)
                 | (Shipped, Refunded)
+                | (Shipped, Expired)
             | (Disputed, Completed)
             | (Disputed, Refunded)
     );
@@ -150,6 +153,24 @@ pub struct EscrowData {
     pub delivered_at: Option<u64>,
     pub tracking_id: Option<String>,
     pub state: EscrowState,
+    /// Optional absolute timestamp (seconds since epoch) at which this escrow expires.
+    /// If `None`, the escrow has no expiration and lives until completed/canceled.
+    pub expires_at: Option<u64>,
+    /// Grace period in seconds after `expires_at` before the buyer can reclaim funds.
+    /// Gives the seller a window to complete the transaction even after soft-expiration.
+    /// Only meaningful when `expires_at` is `Some`.
+    pub grace_period: u64,
+}
+
+/// Returns `Err(EscrowExpired)` if the escrow has an expiration set and the
+/// current ledger timestamp is past `expires_at`.
+fn ensure_not_expired(env: &Env, escrow: &EscrowData) -> Result<(), ContractError> {
+    if let Some(expires_at) = escrow.expires_at {
+        if env.ledger().timestamp() >= expires_at {
+            return Err(ContractError::EscrowExpired);
+        }
+    }
+    Ok(())
 }
 
 fn validate_escrow_fee_bps(fee_bps: u32) -> Result<(), ContractError> {
@@ -340,6 +361,108 @@ fn increment_counter(env: &Env, key: &DataKey) -> Result<(), ContractError> {
     let next = current.checked_add(1).ok_or(ContractError::ArithmeticError)?;
     env.storage().instance().set(key, &next);
     Ok(())
+}
+
+fn create_escrow_internal(
+    env: &Env,
+    seller: Address,
+    buyer: Option<Address>,
+    resolver: Address,
+    token: Address,
+    amount: i128,
+    fee_bps: u32,
+    shipping_window: u64,
+    expires_at: Option<u64>,
+    grace_period: u64,
+) -> Result<u64, ContractError> {
+    seller.require_auth();
+
+    ensure_not_paused(env)?;
+
+    if amount <= 0 {
+        return Err(ContractError::InvalidAmount);
+    }
+    if amount > MAX_ESCROW_AMOUNT {
+        return Err(ContractError::AmountExceedsMaximum);
+    }
+
+    if amount < MIN_ESCROW_AMOUNT {
+        return Err(ContractError::InvalidAmount);
+    }
+
+    validate_escrow_fee_bps(fee_bps)?;
+
+    // Validate expiration: must be in the future if set.
+    if let Some(exp) = expires_at {
+        if exp <= env.ledger().timestamp() {
+            return Err(ContractError::InvalidAmount);
+        }
+    }
+
+    // Security: all three roles must be distinct to preserve the trustless
+    // three-party separation.  A resolver that equals the seller or buyer can
+    // unilaterally resolve disputes in their own favour; a buyer that equals
+    // the seller makes the escrow a self-dealing no-op.
+    if resolver == seller {
+        return Err(ContractError::ConflictingRoles);
+    }
+    if let Some(ref b) = buyer {
+        if b == &seller || b == &resolver {
+            return Err(ContractError::ConflictingRoles);
+        }
+    }
+
+    let escrow_id: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::EscrowCounter)
+        .expect("counter initialized");
+    let next_id = escrow_id.checked_add(1).ok_or(ContractError::ArithmeticError)?;
+    env.storage()
+        .instance()
+        .set(&DataKey::EscrowCounter, &next_id);
+    // Extend instance storage TTL on every counter access so the counter key
+    // cannot expire between a read and the subsequent write.
+    let ext = get_ttl_extension(env);
+    env.storage().instance().extend_ttl(ext / 2, ext);
+
+    let escrow = EscrowData {
+        seller,
+        buyer,
+        resolver,
+        token,
+        amount,
+        fee_bps,
+        shipping_window,
+        funded_at: 0,
+        dispute_deadline: 0,
+        state: EscrowState::Pending,
+        shipped_at: 0,
+        delivered_at: None,
+        tracking_id: None,
+        expires_at,
+        grace_period,
+    };
+
+    save_escrow(env, escrow_id, &escrow);
+
+    let mut vendor_escrows = storage::read_vendor_escrow_index(env, &escrow.seller);
+    vendor_escrows.push_back(escrow_id);
+    // write_vendor_escrow_index now handles TTL extension automatically
+    storage::write_vendor_escrow_index(env, &escrow.seller, &vendor_escrows);
+
+    increment_counter(env, &DataKey::TotalCreated)?;
+    emit_escrow_created(
+        env,
+        escrow_id,
+        escrow.seller.clone(),
+        escrow.resolver.clone(),
+        escrow.token.clone(),
+        escrow.amount,
+        escrow.fee_bps,
+        escrow.shipping_window,
+    );
+    Ok(escrow_id)
 }
 
 #[contractimpl]
@@ -545,53 +668,8 @@ impl Escrow {
         fee_bps: u32,
         shipping_window: u64,
     ) -> Result<u64, ContractError> {
-        // SECURITY:
-        // Authenticate before any state reads.
-        seller.require_auth();
-
-        ensure_not_paused(&env)?;
-
-        if amount <= 0 {
-            return Err(ContractError::InvalidAmount);
-        }
-        if amount > MAX_ESCROW_AMOUNT {
-            return Err(ContractError::AmountExceedsMaximum);
-        }
-
-        if amount < MIN_ESCROW_AMOUNT {
-            return Err(ContractError::InvalidAmount);
-        }
-
-        validate_escrow_fee_bps(fee_bps)?;
-
-        // Security: all three roles must be distinct to preserve the trustless
-        // three-party separation.  A resolver that equals the seller or buyer can
-        // unilaterally resolve disputes in their own favour; a buyer that equals
-        // the seller makes the escrow a self-dealing no-op.
-        if resolver == seller {
-            return Err(ContractError::ConflictingRoles);
-        }
-        if let Some(ref b) = buyer {
-            if b == &seller || b == &resolver {
-                return Err(ContractError::ConflictingRoles);
-            }
-        }
-
-        let escrow_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::EscrowCounter)
-            .expect("counter initialized");
-        let next_id = escrow_id.checked_add(1).ok_or(ContractError::ArithmeticError)?;
-        env.storage()
-            .instance()
-            .set(&DataKey::EscrowCounter, &next_id);
-        // Extend instance storage TTL on every counter access so the counter key
-        // cannot expire between a read and the subsequent write.
-        let ext = get_ttl_extension(&env);
-        env.storage().instance().extend_ttl(ext / 2, ext);
-
-        let escrow = EscrowData {
+        create_escrow_internal(
+            &env,
             seller,
             buyer,
             resolver,
@@ -599,33 +677,150 @@ impl Escrow {
             amount,
             fee_bps,
             shipping_window,
-            funded_at: 0,
-            dispute_deadline: 0,
-            state: EscrowState::Pending,
-            shipped_at: 0,
-            delivered_at: None,
-            tracking_id: None,
+            None,
+            0,
+        )
+    }
+
+    pub fn create_escrow_with_expiration(
+        env: Env,
+        seller: Address,
+        buyer: Option<Address>,
+        resolver: Address,
+        token: Address,
+        amount: i128,
+        fee_bps: u32,
+        shipping_window: u64,
+        expires_at: Option<u64>,
+        grace_period: u64,
+    ) -> Result<u64, ContractError> {
+        create_escrow_internal(
+            &env,
+            seller,
+            buyer,
+            resolver,
+            token,
+            amount,
+            fee_bps,
+            shipping_window,
+            expires_at,
+            grace_period,
+        )
+    }
+
+    /// Buyer funds a pending escrow. Transitions Pending → Funded.
+    ///
+    /// Transfers `escrow.amount` tokens from the buyer to the contract vault,
+    /// records the buyer address, and starts the dispute-deadline clock.
+    pub fn fund_escrow(env: Env, escrow_id: u64, buyer: Address) -> Result<(), ContractError> {
+        buyer.require_auth();
+
+        ensure_not_paused(&env)?;
+        let mut escrow = load_escrow(&env, escrow_id)?;
+
+        if escrow.state != EscrowState::Pending {
+            return Err(ContractError::InvalidState);
+        }
+
+        // Block funding of expired escrows.
+        ensure_not_expired(&env, &escrow)?;
+
+        // Security: buyer must differ from seller and resolver.
+        if buyer == escrow.seller {
+            return Err(ContractError::ConflictingRoles);
+        }
+        if buyer == escrow.resolver {
+            return Err(ContractError::ConflictingRoles);
+        }
+        // If an intended buyer was specified at creation, only that address may fund.
+        if let Some(ref expected_buyer) = escrow.buyer {
+            if &buyer != expected_buyer {
+                return Err(ContractError::NotAuthorized);
+            }
+        }
+
+        let token_client = token::Client::new(&env, &escrow.token);
+        token_client.transfer(&buyer, &env.current_contract_address(), &escrow.amount);
+
+        let now = env.ledger().timestamp();
+        escrow.buyer = Some(buyer.clone());
+        escrow.state = EscrowState::Funded;
+        escrow.funded_at = now;
+        escrow.dispute_deadline = now
+            .checked_add(DISPUTE_WINDOW)
+            .ok_or(ContractError::ArithmeticOverflow)?;
+
+        // Index the buyer for lookup.
+        let mut buyer_escrows: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BuyerEscrowIndex(buyer.clone()))
+            .unwrap_or(Vec::new(&env));
+        buyer_escrows.push_back(escrow_id);
+        let buyer_key = DataKey::BuyerEscrowIndex(buyer.clone());
+        let ext = get_ttl_extension(&env);
+        env.storage().persistent().set(&buyer_key, &buyer_escrows);
+        env.storage().persistent().extend_ttl(&buyer_key, ext / 2, ext);
+
+        save_escrow(&env, escrow_id, &escrow);
+        emit_escrow_funded(&env, escrow_id, buyer, escrow.amount);
+        Ok(())
+    }
+
+    /// Buyer raises a dispute on a funded or shipped escrow.
+    ///
+    /// Transitions Funded/Shipped → Disputed, stores dispute metadata,
+    /// and emits the `dispute_raised` event.
+    pub fn raise_dispute(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        reason: Symbol,
+        description: String,
+        evidence_hash: BytesN<32>,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+
+        ensure_not_paused(&env)?;
+        let mut escrow = load_escrow(&env, escrow_id)?;
+
+        let buyer = escrow.buyer.clone().ok_or(ContractError::EscrowHasNoBuyer)?;
+        if caller != buyer {
+            return Err(ContractError::NotAuthorized);
+        }
+
+        if escrow.state != EscrowState::Funded && escrow.state != EscrowState::Shipped {
+            return Err(ContractError::InvalidState);
+        }
+
+        if description.len() > MAX_DESCRIPTION_LEN {
+            return Err(ContractError::InputTooLong);
+        }
+
+        escrow.state = EscrowState::Disputed;
+
+        let dispute_data = DisputeData {
+            escrow_id,
+            reason: reason.clone(),
+            description: description.clone(),
+            evidence_hash: evidence_hash.clone(),
+            status: DisputeStatus::Active,
+            disputed_at: env.ledger().timestamp(),
+            tracking_id: escrow.tracking_id.clone(),
         };
 
         save_escrow(&env, escrow_id, &escrow);
-
-        let mut vendor_escrows = storage::read_vendor_escrow_index(&env, &escrow.seller);
-        vendor_escrows.push_back(escrow_id);
-        // write_vendor_escrow_index now handles TTL extension automatically
-        storage::write_vendor_escrow_index(&env, &escrow.seller, &vendor_escrows);
-
-        increment_counter(&env, &DataKey::TotalCreated)?;
-        emit_escrow_created(
+        save_dispute(&env, escrow_id, &dispute_data);
+        increment_counter(&env, &DataKey::TotalDisputed)?;
+        emit_dispute_raised(
             &env,
             escrow_id,
-            escrow.seller.clone(),
-            escrow.resolver.clone(),
-            escrow.token.clone(),
-            escrow.amount,
-            escrow.fee_bps,
-            escrow.shipping_window,
+            buyer,
+            reason,
+            description,
+            evidence_hash,
         );
-        Ok(escrow_id)
+        Ok(())
     }
 
     pub fn cancel_escrow(env: Env, caller: Address, escrow_id: u64) -> Result<(), ContractError> {
@@ -649,6 +844,63 @@ impl Escrow {
         Ok(())
     }
 
+    /// Reclaim funds from an expired escrow after the grace period has elapsed.
+    ///
+    /// Permissionless: anyone can call this once the escrow has expired and the
+    /// grace period has passed. Funds are returned to the buyer. Transitions the
+    /// escrow to `Expired` state.
+    pub fn reclaim_expired(env: Env, escrow_id: u64) -> Result<(), ContractError> {
+        ensure_not_paused(&env)?;
+        let mut escrow = load_escrow(&env, escrow_id)?;
+
+        // Only funded or shipped escrows hold reclaimable funds.
+        if escrow.state != EscrowState::Funded && escrow.state != EscrowState::Shipped {
+            return Err(ContractError::InvalidState);
+        }
+
+        let buyer = escrow.buyer.clone().ok_or(ContractError::EscrowHasNoBuyer)?;
+
+        // Must have an expiration set.
+        let expires_at = escrow.expires_at.ok_or(ContractError::InvalidState)?;
+
+        let now = env.ledger().timestamp();
+
+        // Must be past expiration.
+        if now < expires_at {
+            return Err(ContractError::InvalidState);
+        }
+
+        // Must be past the grace period.
+        let reclaim_eligible_at = expires_at
+            .checked_add(escrow.grace_period)
+            .ok_or(ContractError::ArithmeticOverflow)?;
+        if now < reclaim_eligible_at {
+            return Err(ContractError::GracePeriodNotElapsed);
+        }
+
+        // If there's an active dispute, don't allow reclaim (let resolution handle it).
+        if load_dispute(&env, escrow_id).is_ok() {
+            let dispute = load_dispute(&env, escrow_id)?;
+            if dispute.status == DisputeStatus::Active {
+                return Err(ContractError::InvalidState);
+            }
+        }
+
+        // Transfer funds back to buyer.
+        let token_client = token::Client::new(&env, &escrow.token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &buyer,
+            &escrow.amount,
+        );
+
+        escrow.state = EscrowState::Expired;
+        save_escrow(&env, escrow_id, &escrow);
+        increment_counter(&env, &DataKey::TotalRefunded)?;
+        emit_escrow_reclaimed(&env, escrow_id, buyer, escrow.amount);
+        Ok(())
+    }
+
     /// Seller marks an escrow as shipped. Transitions Funded → Shipped.
     pub fn mark_shipped(env: Env, caller: Address, escrow_id: u64, tracking_id: String) -> Result<(), ContractError> {
         // SECURITY:
@@ -665,6 +917,9 @@ impl Escrow {
         if escrow.state != EscrowState::Funded {
             return Err(ContractError::InvalidState);
         }
+
+        // Block shipping of expired escrows.
+        ensure_not_expired(&env, &escrow)?;
 
         if tracking_id.len() == 0 {
             return Err(ContractError::InvalidTrackingId);
@@ -1042,7 +1297,7 @@ impl Escrow {
         // Reject terminal states
         let is_terminal = matches!(
             escrow.state,
-            EscrowState::Completed | EscrowState::Refunded | EscrowState::Canceled
+            EscrowState::Completed | EscrowState::Refunded | EscrowState::Canceled | EscrowState::Expired
         );
         if is_terminal {
             return Err(ContractError::InvalidState);
@@ -1104,3 +1359,4 @@ mod test_concurrent_vendor_escrows;
 mod test_not_found;
 mod test_get_escrows_by_vendor;
 mod test_resolver_rotation;
+mod test_expiration;
