@@ -62,4 +62,6 @@ pub enum ContractError {
     EscrowExpired = 24,
     /// Returned when reclaim is attempted before the grace period after expiration has elapsed.
     GracePeriodNotElapsed = 25,
+    /// Returned when raising a dispute after the dispute window has closed.
+    DisputeWindowClosed = 24,
 }

@@ -403,6 +403,7 @@ fn test_dispute_allocations_include_protocol_fee() {
     use crate::helpers::payout::calculate_dispute_allocations;
     use crate::types::{EscrowState, ResolutionType};
     use crate::EscrowData;
+    use crate::{EscrowData, EscrowState, ResolutionType};
     use soroban_sdk::{testutils::Address as _, Address, Env};
 
     let env = Env::default();
