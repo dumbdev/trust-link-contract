@@ -22,12 +22,6 @@ pub enum DataKey {
     TotalRefunded,
     FeeConfig,
     BuyerEscrowIndex(Address),
-    TokenAllowlistEnabled,
-    TokenAllowlist,
-    PlatformFeeBps,
-    Treasury,
-    MinAmount,
-    MaxAmount,
 }
 
 #[contracttype]
